@@ -17,7 +17,6 @@ import {
   type OrderBy,
   type OrderByDirection,
   type QueryResult,
-  type QuerySchema,
   type WhereOptions,
 } from "./types.ts";
 import { FORBIDDEN_NEXT, LABELS } from "./types/validation-errors.types.ts";
@@ -44,15 +43,8 @@ export type GroupQuery<T> = {
 class Query<T = any> {
   private _filters: Array<ExpressionToken<T>> = [];
   private _orderBy?: OrderBy<T> | null = null;
-  private readonly _arrays: ReadonlyArray<string>;
 
-  /**
-   * @param schema - Optional runtime facts about `T` that types can't carry,
-   *   such as which paths hold arrays.
-   */
-  constructor(schema?: QuerySchema<T>) {
-    this._arrays = schema?.arrays ?? [];
-  }
+  constructor() {}
 
   private _add(op: ExpressionToken<T>, idx?: number): void {
     if (idx !== undefined) {
@@ -60,12 +52,6 @@ class Query<T = any> {
     } else {
       this._filters.push(op);
     }
-  }
-
-  private _isArrayPath(property: string): boolean {
-    return this._arrays.some(
-      (path) => property === path || property.startsWith(`${path}.`),
-    );
   }
 
   hasKey(key: NestedKeyOf<T>): boolean {
@@ -201,7 +187,6 @@ class Query<T = any> {
       value: serialize(value),
       valueType: valueTypeOf(value),
     };
-    if (this._isArrayPath(property)) condition.isArray = true;
     if (options?.caseInsensitive) condition.caseInsensitive = true;
 
     this._add(condition as Condition<T>, options?.insertAtIndex);

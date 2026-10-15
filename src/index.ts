@@ -12,12 +12,10 @@ export {
   OpToken,
   type Operator,
   type OperatorFor,
-  OperatorBaseline,
   OperatorsByValueType,
   LogicalOperators,
   type OrderBy,
   type QueryResult,
-  type QuerySchema,
   ValueType,
   type WhereOptions,
 } from "./lib/types.ts";

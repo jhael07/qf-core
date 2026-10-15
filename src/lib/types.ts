@@ -1,5 +1,4 @@
 import type {
-  ArrayKeyOf,
   NestedKeyOf,
   NestedValueOf,
   SerializedValue,
@@ -123,13 +122,6 @@ export type WhereOptions<T, P extends NestedKeyOf<T>> = {
     }
   : { caseInsensitive?: never });
 
-export type QuerySchema<T> = {
-  /** Paths of `T` that hold arrays. Conditions on or under them are marked `isArray`. */
-  arrays?: ReadonlyArray<ArrayKeyOf<T>>;
-};
-
-// username new 'Marinai'
-
 export enum LogicalOperators {
   AND = "&&",
   OR = "||",
@@ -155,8 +147,6 @@ export type Condition<
       operator: Op;
       value: SerializedValue<NestedValueOf<T, P>> | null;
       valueType: ValueType;
-      /** Present when the path is listed in the schema's `arrays`. */
-      isArray?: true;
       /** Present when the condition was added with `caseInsensitive: true`. */
       caseInsensitive?: true;
     }
