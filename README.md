@@ -1,21 +1,21 @@
-# @qf/core
+# @qfilter/core
 
 Type-safe, chainable query builder for composing validated filter expressions with nested paths, grouping, and ordering.
 
 ## Install
 
 ```bash
-pnpm add @qf/core
+pnpm add @qfilter/core
 ```
 
 ```bash
-npm install @qf/core
+npm install @qfilter/core
 ```
 
 ## Quick start
 
 ```ts
-import { Op, Query } from "@qf/core";
+import { Op, Query } from "@qfilter/core";
 
 type User = {
   name: string;
@@ -190,7 +190,7 @@ type QueryResult<T> = {
 `build()` checks the token order and throws a `ValidationError` on the first problem. Index arguments are checked right away, when `where`, `and`, `or`, `group` or `remove` is called.
 
 ```ts
-import { Query, Op, ValidationError } from "@qf/core";
+import { Query, Op, ValidationError } from "@qfilter/core";
 
 try {
   new Query<User>().where("age", Op.GREATER_THAN, 18).and().build();
