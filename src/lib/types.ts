@@ -1,4 +1,9 @@
-import type { NestedKeyOf, NestedValueOf, SerializedValue } from "./types.helpers.ts";
+import type {
+  NestedKeyOf,
+  NestedValueOf,
+  NullableKeyOf,
+  SerializedValue,
+} from "./types.helpers.ts";
 
 export enum Op {
   EQUAL = "eq",
@@ -184,4 +189,26 @@ export type OrderBy<T> = {
 export type QueryResult<T> = {
   filters: Array<ExpressionToken<T>>;
   order: OrderBy<T> | undefined | null;
+};
+
+/**
+ * The builder a {@link Query.group} callback receives. Tokens always append
+ * inside the group, so none of its methods take an index.
+ */
+export type GroupQuery<T> = {
+  and(): GroupQuery<T>;
+  or(): GroupQuery<T>;
+  group(fn: (query: GroupQuery<T>) => void): GroupQuery<T>;
+
+  where<P extends NestedKeyOf<T>>(
+    property: P,
+    operator: OperatorFor<NestedValueOf<T, P>>,
+    value: NestedValueOf<T, P>,
+    options?: CompareOptions<T, P>,
+  ): GroupQuery<T>;
+  where<P extends NullableKeyOf<T>>(
+    property: P,
+    operator: NullOperator,
+    value: null,
+  ): GroupQuery<T>;
 };

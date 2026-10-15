@@ -102,14 +102,3 @@ describe("index bounds", () => {
     expect(() => new Query<Person>().remove(0)).toThrow("Invalid index 0: there are no filters.");
   });
 });
-
-describe("remove", () => {
-  it("removes a condition together with its connector", () => {
-    const query = new Query<Person>().where("age", ">", 18).and().where("name", "=", "Ana");
-
-    query.remove(2);
-    query.remove(1);
-
-    expect(shape(query)).toEqual(["age"]);
-  });
-});

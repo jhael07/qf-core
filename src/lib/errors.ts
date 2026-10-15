@@ -6,7 +6,8 @@ export type ValidationErrorCode =
   | "EMPTY_GROUP"
   | "CONSECUTIVE_CONDITIONS"
   | "CONSECUTIVE_LOGICAL_OPERATORS"
-  | "INVALID_INDEX";
+  | "INVALID_INDEX"
+  | "CONDITION_NOT_FOUND";
 
 export class ValidationError extends Error {
   readonly code: ValidationErrorCode;

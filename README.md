@@ -213,6 +213,7 @@ try {
 | `EMPTY_GROUP`                   | A group with nothing inside                                            |
 | `UNBALANCED_GROUP`              | A `)` without a matching `(`, or a `(` that is never closed            |
 | `INVALID_INDEX`                 | An index that is not an integer within the filters                     |
+| `CONDITION_NOT_FOUND`           | `remove(-1)`: `getIndexByToken` found no matching condition            |
 
 ## Inserting at an index
 
@@ -259,11 +260,13 @@ new Query<User>().where("age", Op.GREATER_THAN, 18).and(5);
 
 ## Helpers
 
-| Method                  | Description                                       |
-| ----------------------- | ------------------------------------------------- |
-| `hasKey(property)`      | `true` if any condition uses `property`           |
-| `hasValue(property, v)` | `true` if a condition on `property` has value `v` |
-| `remove(index)`         | Removes the token at `index` from `filters`       |
+| Method                  | Description                                                 |
+| ----------------------- | ----------------------------------------------------------- |
+| `hasKey(property)`      | `true` if any condition uses `property`                     |
+| `hasValue(property, v)` | `true` if a condition on `property` has value `v`           |
+| `getIndexByToken(p, v)` | Index of the first condition on `p` with value `v`, or `-1` |
+| `remove(index)`         | Removes the condition at `index` and its connector          |
+| `totalCount`            | Number of tokens in `filters`                               |
 
 ### Add a filter only once
 
@@ -305,19 +308,28 @@ query.hasValue("deletedAt", new Date("2024-01-01")); // true
 
 ### Remove a condition
 
-`remove(index)` removes a single token, so remove the condition's connector too. Remove the higher index first: once a token is removed, every token after it moves down by one.
+`remove(index)` removes the condition at `index` together with its connector, so the filters stay valid. It takes the connector after the condition, or the one before it when the condition is last in the filters or its group. Find the index with `getIndexByToken`:
 
 ```ts
 // filters: [address.city = "Madrid", ||, address.city = "Lisbon"]
 
 // The user unchecks Lisbon
-query.remove(2); // address.city = "Lisbon"
-query.remove(1); // ||
+query.remove(query.getIndexByToken("address.city", "Lisbon"));
 
 // filters: [address.city = "Madrid"]
 ```
 
-`remove` throws `INVALID_INDEX` when there is no token at `index`.
+When the condition is the only thing in a group, the group goes too, with its own connector:
+
+```ts
+// filters: [age > 18, &&, (, name = "Ana", ), ||, active = true]
+query.remove(query.getIndexByToken("name", "Ana"));
+// filters: [age > 18, &&, active = true]
+```
+
+A group left with one condition, such as `(age > 18)`, is kept.
+
+`remove` throws `CONDITION_NOT_FOUND` when `index` is `-1`, which is what `getIndexByToken` returns when nothing matches. It throws `INVALID_INDEX` when there is no token at `index` or the token there is not a condition.
 
 ## License
 

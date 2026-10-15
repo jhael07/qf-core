@@ -30,13 +30,15 @@
     "check": "vp check",
     "exec": "node dist/index.mjs",
     "prepublishOnly": "vp run build",
-    "release-it": "release-it --dry-run --no-npm",
+    "release": "release",
     "prepare": "vp config"
+  },
+  "dependencies": {
+    "standard-version": "^9.5.0"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
     "bumpp": "^11.1.0",
-    "release-it": "^21.1.1",
     "typescript": "^7.0.2",
     "vite-plus": "catalog:"
   },

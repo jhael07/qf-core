@@ -1,67 +1,34 @@
-import { ValidationError, type ValidationErrorCode } from "./errors.ts";
-import { serialize, valueTypeOf } from "./helpers/index.ts";
 import type { NestedKeyOf, NestedValueOf, NullableKeyOf } from "./types.helpers.ts";
+import { checkIndex, indexOf, serialize, valueTypeOf } from "./helpers/index.ts";
+import { FORBIDDEN_NEXT, LABELS } from "./types/validation-errors.types.ts";
+import { ValidationError, type ValidationErrorCode } from "./errors.ts";
 import {
-  type CompareOptions,
-  type Condition,
+  type OrderByDirection,
   type ExpressionToken,
   type ExpressionType,
-  type InsertAt,
   type InsertOptions,
-  LogicalOperators,
   type NullOperator,
-  type Operator,
+  type WhereOptions,
+  LogicalOperators,
   OperatorBaseline,
   type OperatorFor,
-  type OrderBy,
-  type OrderByDirection,
   type QueryResult,
-  type WhereOptions,
+  type GroupQuery,
+  type Condition,
+  type InsertAt,
+  type Operator,
+  type OrderBy,
 } from "./types.ts";
-import { FORBIDDEN_NEXT, LABELS } from "./types/validation-errors.types.ts";
-
-/**
- * The builder a {@link Query.group} callback receives. Tokens always append
- * inside the group, so none of its methods take an index.
- */
-export type GroupQuery<T> = {
-  and(): GroupQuery<T>;
-  or(): GroupQuery<T>;
-  group(fn: (query: GroupQuery<T>) => void): GroupQuery<T>;
-
-  where<P extends NestedKeyOf<T>>(
-    property: P,
-    operator: OperatorFor<NestedValueOf<T, P>>,
-    value: NestedValueOf<T, P>,
-    options?: CompareOptions<T, P>,
-  ): GroupQuery<T>;
-  where<P extends NullableKeyOf<T>>(
-    property: P,
-    operator: NullOperator,
-    value: null,
-  ): GroupQuery<T>;
-};
-
-const indexOf = (at?: InsertAt): number | undefined =>
-  typeof at === "number" ? at : at?.insertAtIndex;
-
-const checkIndex = (idx: number, max: number): void => {
-  if (Number.isInteger(idx) && idx >= 0 && idx <= max) return;
-  throw new ValidationError(
-    "INVALID_INDEX",
-    max < 0
-      ? `Invalid index ${idx}: there are no filters.`
-      : `Invalid index ${idx}: expected an integer from 0 to ${max}.`,
-    idx,
-  );
-};
 
 // biome-ignore lint/suspicious/noExplicitAny: <By providing any you can use the class without being required to specify the type>
 class Query<T = any> {
   private _filters: Array<ExpressionToken<T>> = [];
   private _orderBy?: OrderBy<T> | null = null;
 
-  totalCount: number = this._filters.length;
+  /** The number of tokens in the filters: conditions, connectors and group brackets. */
+  get totalCount(): number {
+    return this._filters.length;
+  }
 
   private _add(tokens: Array<ExpressionToken<T>>, at?: InsertAt): void {
     const idx = indexOf(at);
@@ -69,7 +36,9 @@ class Query<T = any> {
       this._filters.push(...tokens);
       return;
     }
+
     checkIndex(idx, this._filters.length);
+
     this._filters.splice(idx, 0, ...tokens);
   }
 
@@ -84,9 +53,10 @@ class Query<T = any> {
   }
 
   /**
-   * Finds the position of the first condition on `key` whose stored value is
-   * strictly equal to `value`. Pass the result to {@link Query.remove} or as
-   * an insertion index.
+   * Finds the position of the first condition on `key` whose value matches
+   * `value`. Values are compared the way they are stored, so a `Date` matches
+   * its ISO string. Pass the result to {@link Query.remove} or as an
+   * insertion index.
    *
    * @param key - The property, or nested property path, of the condition.
    * @param value - The value the condition compares against.
@@ -100,7 +70,7 @@ class Query<T = any> {
    */
   getIndexByToken(key: NestedKeyOf<T>, value: unknown): number {
     return this._filters.findIndex(
-      (x) => x.type === "condition" && x.value === value && x.property === key,
+      (x) => x.type === "condition" && x.property === key && x.value === serialize(value),
     );
   }
 
@@ -112,15 +82,86 @@ class Query<T = any> {
   }
 
   /**
-   * Removes the token at `idx` from the filters. Only that one token is
-   * removed, so remove a condition's connector as well.
+   * Removes the condition at `idx` together with the tokens that would be left
+   * dangling, so the filters stay valid:
    *
-   * @throws {@link ValidationError} with code `INVALID_INDEX` when `idx` is
-   *   not an existing position.
+   * - the connector after it, or the one before it when it is the last
+   *   condition in the filters or its group;
+   * - its group when it is the only thing inside, applying the same rule to
+   *   the group, so emptied nested groups go as well.
+   *
+   * A group left with a single condition is kept as is.
+   *
+   * @param idx - The condition's position, usually from {@link Query.getIndexByToken}.
+   *
+   * @throws - {@link ValidationError} with code `CONDITION_NOT_FOUND` when `idx`
+   *   is `-1`, the value {@link Query.getIndexByToken} returns for no match.
+   * @throws - {@link ValidationError} with code `INVALID_INDEX` when `idx` is
+   *   not an existing position or the token there is not a condition.
+   *
+   * @example
+   * ```ts
+   * // filters: [age > 18, &&, name = "Ana", ||, active = true]
+   * query.remove(query.getIndexByToken("name", "Ana"));
+   * // filters: [age > 18, &&, active = true]
+   * ```
    */
   remove(idx: number): void {
+    this.validateRemovalIndex(idx);
+
+    const [start, end] = this.findRemovalRange(idx);
+    this._filters.splice(start, end - start + 1);
+  }
+
+  private validateRemovalIndex(idx: number): void {
+    if (idx === -1) {
+      throw new ValidationError(
+        "CONDITION_NOT_FOUND",
+        "No condition matches: nothing to remove.",
+        idx,
+      );
+    }
+
     checkIndex(idx, this._filters.length - 1);
-    this._filters.splice(idx, 1);
+
+    if (this._filters[idx].type !== "condition") {
+      throw new ValidationError(
+        "INVALID_INDEX",
+        `Invalid index ${idx}: the token there is not a condition.`,
+        idx,
+      );
+    }
+  }
+
+  private findRemovalRange(idx: number): [number, number] {
+    const isConnector = (i: number) => {
+      const type = this._filters[i]?.type;
+      return type === "and" || type === "or";
+    };
+
+    let start = idx;
+    let end = idx;
+
+    // Grow the [start, end] range outward to clean up adjacent connectors or empty groups
+    while (true) {
+      if (isConnector(end + 1)) {
+        end++;
+        break;
+      }
+
+      if (isConnector(start - 1)) {
+        start--;
+        break;
+      }
+
+      if (this._filters[start - 1]?.type !== "startGroup") break;
+      if (this._filters[end + 1]?.type !== "endGroup") break;
+
+      start--;
+      end++;
+    }
+
+    return [start, end];
   }
 
   /**
