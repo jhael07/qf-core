@@ -5,11 +5,12 @@ export type ValidationErrorCode =
   | "UNBALANCED_GROUP"
   | "EMPTY_GROUP"
   | "CONSECUTIVE_CONDITIONS"
-  | "CONSECUTIVE_LOGICAL_OPERATORS";
+  | "CONSECUTIVE_LOGICAL_OPERATORS"
+  | "INVALID_INDEX";
 
 export class ValidationError extends Error {
   readonly code: ValidationErrorCode;
-  /** Position of the offending token in the filters list. */
+  /** Position of the offending token in the filters list, or the invalid index that was passed. */
   readonly index: number;
 
   constructor(code: ValidationErrorCode, message: string, index: number) {

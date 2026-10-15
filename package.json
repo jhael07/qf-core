@@ -2,7 +2,7 @@
   "name": "@qf/core",
   "version": "0.0.1",
   "description": "Type-safe, chainable query builder for composing validated filter expressions with nested paths, grouping, and ordering.",
-  "homepage": "https://github.com/author/library#readme",
+  "homepage": "https://github.com/jhael07/qf-core#readme",
   "bugs": {
     "url": "https://github.com/jhael07/qf-core/issues"
   },

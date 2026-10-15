@@ -1,8 +1,4 @@
-import type {
-  NestedKeyOf,
-  NestedValueOf,
-  SerializedValue,
-} from "./types.helpers.ts";
+import type { NestedKeyOf, NestedValueOf, SerializedValue } from "./types.helpers.ts";
 
 export enum Op {
   EQUAL = "eq",
@@ -67,7 +63,16 @@ export enum ValueType {
   NULL = "null",
 }
 
-const EQUALITY = ["EQUAL", "NOT_EQUAL", "CONTAINS", "NOT_CONTAINS"] as const;
+const EQUALITY = ["EQUAL", "NOT_EQUAL"] as const;
+const TEXT = [
+  ...EQUALITY,
+  "CONTAINS",
+  "NOT_CONTAINS",
+  "STARTS_WITH",
+  "NOT_STARTS_WITH",
+  "ENDS_WITH",
+  "NOT_ENDS_WITH",
+] as const;
 const RANGE = [
   ...EQUALITY,
   "LESS_THAN",
@@ -78,7 +83,7 @@ const RANGE = [
 
 /** Operators (by name) that each value type supports. */
 export const OperatorsByValueType = {
-  [ValueType.STRING]: Object.keys(OpToken) as OpTokenName[],
+  [ValueType.STRING]: TEXT,
   [ValueType.NUMBER]: RANGE,
   [ValueType.BOOLEAN]: EQUALITY,
   [ValueType.DATE]: RANGE,
@@ -103,24 +108,28 @@ type ValueTypeOf<V> = V extends string
         : never;
 
 /** Operator spellings allowed for a value of type `V`. */
-export type OperatorFor<V> = Spellings<
-  (typeof OperatorsByValueType)[ValueTypeOf<V>][number]
->;
+export type OperatorFor<V> = Spellings<(typeof OperatorsByValueType)[ValueTypeOf<V>][number]>;
 
 /** Operator spellings allowed when comparing against `null`. */
-export type NullOperator = Spellings<
-  (typeof OperatorsByValueType)[ValueType.NULL][number]
->;
+export type NullOperator = Spellings<(typeof OperatorsByValueType)[ValueType.NULL][number]>;
 
-export type WhereOptions<T, P extends NestedKeyOf<T>> = {
-  /** Position in the token list where the condition is inserted. */
+export type InsertOptions = {
+  /** Position in the token list where the token is inserted, from `0` to the list length. */
   insertAtIndex?: number;
-} & ([NestedValueOf<T, P>] extends [string]
+};
+
+/** Where to insert a token: an index or `{ insertAtIndex }`. Omit it to append. */
+export type InsertAt = number | InsertOptions;
+
+/** Comparison options for a condition on path `P`. */
+export type CompareOptions<T, P extends NestedKeyOf<T>> = [NestedValueOf<T, P>] extends [string]
   ? {
       /** Compare strings ignoring case. Only available on string paths. */
       caseInsensitive?: boolean;
     }
-  : { caseInsensitive?: never });
+  : { caseInsensitive?: never };
+
+export type WhereOptions<T, P extends NestedKeyOf<T>> = InsertOptions & CompareOptions<T, P>;
 
 export enum LogicalOperators {
   AND = "&&",
@@ -129,17 +138,9 @@ export enum LogicalOperators {
   END_GROUP = ")",
 }
 
-export type ExpressionType =
-  | "condition"
-  | "startGroup"
-  | "endGroup"
-  | "or"
-  | "and";
+export type ExpressionType = "condition" | "startGroup" | "endGroup" | "or" | "and";
 
-export type Condition<
-  T,
-  P extends NestedKeyOf<T> = NestedKeyOf<T>,
-> = P extends unknown
+export type Condition<T, P extends NestedKeyOf<T> = NestedKeyOf<T>> = P extends unknown
   ? {
       type: "condition";
       property: P;
@@ -171,12 +172,7 @@ export type And = {
   operator: LogicalOperators.AND;
 };
 
-export type ExpressionToken<T> =
-  | Condition<T>
-  | StartGroup
-  | EndGroup
-  | Or
-  | And;
+export type ExpressionToken<T> = Condition<T> | StartGroup | EndGroup | Or | And;
 
 export type OrderByDirection = "desc" | "asc";
 

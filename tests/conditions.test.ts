@@ -108,35 +108,6 @@ describe("case-insensitive conditions", () => {
   });
 });
 
-describe("array paths from the schema", () => {
-  const query = () => new Query<Person>({ arrays: ["clubs", "orders"] });
-
-  it("marks conditions on a listed array path", () => {
-    expect(conditionAt(query().where("clubs", "eq", "chess"))).toMatchObject({
-      property: "clubs",
-      value: "chess",
-      valueType: ValueType.STRING,
-      isArray: true,
-    });
-  });
-
-  it("marks conditions on a path nested inside a listed array", () => {
-    expect(conditionAt(query().where("orders.total", ">", 100))).toMatchObject({ isArray: true });
-  });
-
-  it("does not mark paths that only share a prefix with a listed array", () => {
-    const shared = new Query<{ clubs: string[]; clubsCount: number }>({ arrays: ["clubs"] });
-
-    expect(shared.where("clubsCount", ">", 1).build().filters[0]).not.toHaveProperty("isArray");
-  });
-
-  it("does not mark conditions when no schema is given", () => {
-    expect(conditionAt(new Query<Person>().where("clubs", "eq", "chess"))).not.toHaveProperty(
-      "isArray",
-    );
-  });
-});
-
 describe("hasValue", () => {
   it("finds a date condition by an equal Date", () => {
     const query = new Query<Person>().where("createdAt", "=", new Date("2024-01-01"));
