@@ -30,6 +30,7 @@
     "check": "vp check",
     "exec": "node dist/index.mjs",
     "prepublishOnly": "vp run build",
+    "release-it": "pnpm release-it --dry-run --no-npm",
     "prepare": "vp config"
   },
   "devDependencies": {
