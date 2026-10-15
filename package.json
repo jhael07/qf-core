@@ -30,7 +30,7 @@
     "check": "vp check",
     "exec": "node dist/index.mjs",
     "prepublishOnly": "vp run build",
-    "release": "standard-release",
+    "release": "vp dlx standard-version",
     "prepare": "vp config"
   },
   "dependencies": {
