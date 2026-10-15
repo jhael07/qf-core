@@ -40,7 +40,7 @@ describe("condition value types", () => {
     expect(conditionAt(new Query<Person>().where("createdAt", ">", createdAt))).toEqual({
       type: "condition",
       property: "createdAt",
-      operator: ">",
+      operator: "gt",
       value: "2024-01-01T00:00:00.000Z",
       valueType: ValueType.DATE,
     });
@@ -60,6 +60,24 @@ describe("condition value types", () => {
     expect(conditionAt(new Query().where("score", ">=", 9.5))).toMatchObject({
       valueType: ValueType.NUMBER,
     });
+  });
+});
+
+describe("operator spellings", () => {
+  it("stores every spelling of an operator as its standard form", () => {
+    const { filters } = new Query<Person>()
+      .where("age", "GREATER_THAN_OR_EQUAL", 18)
+      .or()
+      .where("age", "gte", 18)
+      .or()
+      .where("age", ">=", 18)
+      .build();
+
+    expect(filters.filter((token) => token.type === "condition").map((c) => c.operator)).toEqual([
+      "gte",
+      "gte",
+      "gte",
+    ]);
   });
 });
 

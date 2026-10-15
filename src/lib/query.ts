@@ -1,5 +1,10 @@
 import { ValidationError, type ValidationErrorCode } from "./errors.ts";
-import type { NestedKeyOf, NestedValueOf, NullableKeyOf } from "./types.helpers.ts";
+import { serialize, valueTypeOf } from "./helpers/index.ts";
+import type {
+  NestedKeyOf,
+  NestedValueOf,
+  NullableKeyOf,
+} from "./types.helpers.ts";
 import {
   type Condition,
   type ExpressionToken,
@@ -7,72 +12,33 @@ import {
   LogicalOperators,
   type NullOperator,
   type Operator,
+  OperatorBaseline,
   type OperatorFor,
   type OrderBy,
   type OrderByDirection,
   type QueryResult,
   type QuerySchema,
-  ValueType,
   type WhereOptions,
 } from "./types.ts";
+import { FORBIDDEN_NEXT, LABELS } from "./types/validation-errors.types.ts";
 
-/**
- * Which token may follow which. Each entry maps a token (or the start of the
- * filters) to the tokens that are NOT allowed right after it, and the error
- * they raise. Pairs missing from the table are valid.
- */
-const FORBIDDEN_NEXT: Record<
-  ExpressionType | "start",
-  Partial<Record<ExpressionType | "end", ValidationErrorCode>>
-> = {
-  start: { and: "INVALID_START", or: "INVALID_START", endGroup: "INVALID_START" },
-  condition: { condition: "CONSECUTIVE_CONDITIONS", startGroup: "MISSING_CONNECTOR" },
-  and: {
-    and: "CONSECUTIVE_LOGICAL_OPERATORS",
-    or: "CONSECUTIVE_LOGICAL_OPERATORS",
-    endGroup: "CONSECUTIVE_LOGICAL_OPERATORS",
-    end: "INVALID_END",
-  },
-  or: {
-    and: "CONSECUTIVE_LOGICAL_OPERATORS",
-    or: "CONSECUTIVE_LOGICAL_OPERATORS",
-    endGroup: "CONSECUTIVE_LOGICAL_OPERATORS",
-    end: "INVALID_END",
-  },
-  startGroup: {
-    and: "INVALID_START",
-    or: "INVALID_START",
-    endGroup: "EMPTY_GROUP",
-    end: "INVALID_END",
-  },
-  endGroup: { condition: "MISSING_CONNECTOR", startGroup: "MISSING_CONNECTOR" },
+export type GroupQuery<T> = {
+  and(idx?: number): GroupQuery<T>;
+  or(idx?: number): GroupQuery<T>;
+
+  where<P extends NestedKeyOf<T>>(
+    property: P,
+    operator: OperatorFor<NestedValueOf<T, P>>,
+    value: NestedValueOf<T, P>,
+    options?: WhereOptions<T, P>,
+  ): GroupQuery<T>;
+  where<P extends NullableKeyOf<T>>(
+    property: P,
+    operator: NullOperator,
+    value: null,
+    options?: { insertAtIndex?: number },
+  ): GroupQuery<T>;
 };
-
-const LABELS: Record<ExpressionType, string> = {
-  condition: "a condition",
-  and: `"${LogicalOperators.AND}"`,
-  or: `"${LogicalOperators.OR}"`,
-  startGroup: `"${LogicalOperators.START_GROUP}"`,
-  endGroup: `"${LogicalOperators.END_GROUP}"`,
-};
-
-const valueTypeOf = (value: unknown): ValueType => {
-  if (value === null) return ValueType.NULL;
-  if (value instanceof Date) return ValueType.DATE;
-  switch (typeof value) {
-    case "string":
-      return ValueType.STRING;
-    case "number":
-      return ValueType.NUMBER;
-    case "boolean":
-      return ValueType.BOOLEAN;
-    default:
-      throw new TypeError(`Unsupported filter value of type "${typeof value}".`);
-  }
-};
-
-const serialize = (value: unknown): unknown =>
-  value instanceof Date ? value.toISOString() : value;
 
 // biome-ignore lint/suspicious/noExplicitAny: <By providing any you can use the class without being required to specify the type>
 class Query<T = any> {
@@ -97,41 +63,28 @@ class Query<T = any> {
   }
 
   private _isArrayPath(property: string): boolean {
-    return this._arrays.some((path) => property === path || property.startsWith(`${path}.`));
+    return this._arrays.some(
+      (path) => property === path || property.startsWith(`${path}.`),
+    );
   }
 
   hasKey(key: NestedKeyOf<T>): boolean {
-    return this._filters.some((x) => x.type === "condition" && x.property === key);
+    return this._filters.some(
+      (x) => x.type === "condition" && x.property === key,
+    );
   }
 
   hasValue(key: NestedKeyOf<T>, value: unknown): boolean {
     return this._filters.some(
-      (x) => x.type === "condition" && x.property === key && x.value === serialize(value),
+      (x) =>
+        x.type === "condition" &&
+        x.property === key &&
+        x.value === serialize(value),
     );
   }
 
   remove(idx: number): void {
     this._filters.splice(idx, 1);
-  }
-
-  /**
-   *
-   * @param idx - index position to insert the token, it's undefined by default.
-   * @returns Query<T>
-   */
-  startGroup(idx?: number): Query<T> {
-    this._add({ type: "startGroup", operator: LogicalOperators.START_GROUP }, idx);
-    return this;
-  }
-
-  /**
-   *
-   * @param idx - index position to insert the token, it's undefined by default.
-   * @returns Query<T>
-   */
-  endGroup(idx?: number): Query<T> {
-    this._add({ type: "endGroup", operator: LogicalOperators.END_GROUP }, idx);
-    return this;
   }
 
   /**
@@ -160,24 +113,24 @@ class Query<T = any> {
   }
 
   /**
-   * Adds a conditional filter token to the query.
+   * Adds a condition to the query.
    *
    * @typeParam P - A key or nested dot-path of `T` (e.g. `"address.city"`),
-   *   inferred from the `property` argument.
+   *   inferred from `property`.
    * @param property - The property, or nested property path, of `T` to filter on.
-   * @param operator - The comparison operator to apply. Only the operators that
-   *   fit the property's value type are allowed (see `OperatorsByValueType`).
-   * @param value - The value to compare against. It's typed as `NestedValueOf<T, P>`,
-   *   so it has to match the type of the property `property` points to. Dates are
-   *   stored as ISO strings. `null` is allowed with `eq`/`neq` on nullable paths.
+   * @param operator - The comparison operator. Only operators that fit the
+   *   property's value type are allowed (see `OperatorsByValueType`).
+   * @param value - The value to compare against. Must match the type of the
+   *   property at `property`. Dates are stored as ISO strings.
    * @param options - Insertion and comparison options, see {@link WhereOptions}.
-   * @returns The current `Query<T>` instance, so calls can be chained.
+   * @returns The current {@link Query} instance, for chaining.
    *
    * @example
    * ```ts
    * new Query<User>()
-   *   .where('age', Op.GreaterThan, 18, { insertAtIndex: 0 })
-   *   .where('address.city', Op.Equals, 'la paz', { caseInsensitive: true });
+   *   .where("age", Op.GreaterThan, 18)
+   *   .and()
+   *   .where("address.city", Op.Equals, "la paz", { caseInsensitive: true });
    * ```
    */
   where<P extends NestedKeyOf<T>>(
@@ -186,22 +139,65 @@ class Query<T = any> {
     value: NestedValueOf<T, P>,
     options?: WhereOptions<T, P>,
   ): Query<T>;
+  /**
+   * Adds a null check on a nullable property.
+   *
+   * @typeParam P - A nullable key or nested dot-path of `T`.
+   * @param property - The nullable property, or nested property path, to check.
+   * @param operator - `Op.Equals` to match `null`, `Op.NotEquals` to exclude it.
+   * @param value - Always `null`.
+   * @param options - Insertion options.
+   * @returns The current {@link Query} instance, for chaining.
+   *
+   * @example
+   * ```ts
+   * new Query<User>().where("deletedAt", Op.Equals, null);
+   * ```
+   */
   where<P extends NullableKeyOf<T>>(
     property: P,
     operator: NullOperator,
     value: null,
     options?: { insertAtIndex?: number },
   ): Query<T>;
+  /**
+   * Adds a group of conditions, equivalent to wrapping them in parentheses.
+   * Use it to control precedence when mixing `and()` and `or()`.
+   *
+   * @param fn - Callback that receives the query scoped to the group.
+   *   Add the grouped conditions to it and return it.
+   * @returns The current {@link Query} instance, for chaining.
+   *
+   * @example
+   * ```ts
+   * // name = "Jhael" OR (password != "123" AND name contains "Jhael")
+   * new Query<User>()
+   *   .where("name", Op.Equals, "Jhael")
+   *   .or()
+   *   .where((q) =>
+   *     q.where("password", Op.NotEquals, "123").and().where("name", Op.Contains, "Jhael"),
+   *   );
+   * ```
+   */
+  where(fn: (query: GroupQuery<T>) => void): Query<T>;
   where(
-    property: string,
-    operator: Operator,
-    value: unknown,
+    propertyOrFn: string | ((query: GroupQuery<T>) => void),
+    operator?: Operator,
+    value?: unknown,
     options?: { insertAtIndex?: number; caseInsensitive?: boolean },
   ): Query<T> {
+    if (typeof propertyOrFn === "function") {
+      this._add({ type: "startGroup", operator: LogicalOperators.START_GROUP });
+      propertyOrFn(this);
+      this._add({ type: "endGroup", operator: LogicalOperators.END_GROUP });
+      return this;
+    }
+
+    const property = propertyOrFn;
     const condition: Record<string, unknown> = {
       type: "condition",
       property,
-      operator,
+      operator: OperatorBaseline[operator as Operator],
       value: serialize(value),
       valueType: valueTypeOf(value),
     };
@@ -213,12 +209,20 @@ class Query<T = any> {
   }
 
   /**
-   * Checks the token sequence against `FORBIDDEN_NEXT` and the group depth,
+   * Checks the token sequence against {@link FORBIDDEN_NEXT} and the group depth,
    * throwing a {@link ValidationError} on the first malformed token.
    */
   private _validateBuild(): void {
-    const fail = (code: ValidationErrorCode, index: number, reason: string): never => {
-      throw new ValidationError(code, `Invalid filter at index ${index}: ${reason}.`, index);
+    const fail = (
+      code: ValidationErrorCode,
+      index: number,
+      reason: string,
+    ): never => {
+      throw new ValidationError(
+        code,
+        `Invalid filter at index ${index}: ${reason}.`,
+        index,
+      );
     };
 
     let prev: ExpressionType | "start" = "start";
@@ -239,7 +243,11 @@ class Query<T = any> {
 
       if (type === "startGroup") depth++;
       if (type === "endGroup" && depth-- === 0) {
-        fail("UNBALANCED_GROUP", index, `${LABELS.endGroup} has no matching opening group`);
+        fail(
+          "UNBALANCED_GROUP",
+          index,
+          `${LABELS.endGroup} has no matching opening group`,
+        );
       }
       prev = type;
     }
@@ -261,10 +269,3 @@ class Query<T = any> {
 }
 
 export default Query;
-
-// group<T>(fn: (query: Query<T>)=> ExpressionToken<T>[] ): Query<T> {
-//   this._add({ type: "startGroup", operator: LogicalOperators.START_GROUP }, idx);
-// fn
-//   this._add({ type: "endGroup", operator: LogicalOperators.END_GROUP }, idx);
-//   return this;
-// }

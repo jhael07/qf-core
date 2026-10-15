@@ -4,13 +4,13 @@
   "description": "Type-safe, chainable query builder for composing validated filter expressions with nested paths, grouping, and ordering.",
   "homepage": "https://github.com/author/library#readme",
   "bugs": {
-    "url": "https://github.com/author/library/issues"
+    "url": "https://github.com/jhael07/qf-core/issues"
   },
   "license": "MIT",
-  "author": "Author Name <author.name@mail.com>",
+  "author": "Jhael Rodriguez <jhaelrodriguez.331@gmail.com>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/author/library.git"
+    "url": "git+https://github.com/jhael07/qf-core.git"
   },
   "files": [
     "dist"
@@ -28,6 +28,7 @@
     "dev": "vp pack --watch",
     "test": "vp test",
     "check": "vp check",
+    "exec": "node dist/index.mjs",
     "prepublishOnly": "vp run build",
     "prepare": "vp config"
   },
