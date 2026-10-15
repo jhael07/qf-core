@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.3](https://github.com/jhael07/qf-core/compare/v0.0.2...v0.0.3) (2026-10-15)
+
+### Bug Fixes
+
+- Added the release command ([eadbb36](https://github.com/jhael07/qf-core/commit/eadbb36e8865381802efc92561189a09fe797f27))
+
 ### 0.0.2 (2026-10-15)
 
 ### Features
