@@ -105,13 +105,13 @@ class Query<T = any> {
    * ```
    */
   remove(idx: number): void {
-    this.validateRemovalIndex(idx);
+    this._validateRemovalIndex(idx);
 
-    const [start, end] = this.findRemovalRange(idx);
+    const [start, end] = this._findRemovalRange(idx);
     this._filters.splice(start, end - start + 1);
   }
 
-  private validateRemovalIndex(idx: number): void {
+  private _validateRemovalIndex(idx: number): void {
     if (idx === -1) {
       throw new ValidationError(
         "CONDITION_NOT_FOUND",
@@ -131,7 +131,7 @@ class Query<T = any> {
     }
   }
 
-  private findRemovalRange(idx: number): [number, number] {
+  private _findRemovalRange(idx: number): [number, number] {
     const isConnector = (i: number) => {
       const type = this._filters[i]?.type;
       return type === "and" || type === "or";
@@ -160,6 +160,20 @@ class Query<T = any> {
     }
 
     return [start, end];
+  }
+
+  /**
+   * Updates any element inside the query.
+   *
+   * @param idx - positional index to update the element
+   * @param expressionToken - Any form of operator such as {@link LogicalOperators} or {@link Condition}
+   * @returns Query<T>
+   */
+  update(idx: number, expressionToken: ExpressionToken<T>): Query<T> {
+    checkIndex(idx, this._filters.length - 1);
+    this._filters.splice(idx, 1, expressionToken);
+
+    return this;
   }
 
   /**

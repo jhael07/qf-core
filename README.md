@@ -187,7 +187,7 @@ type QueryResult<T> = {
 
 ## Validation
 
-`build()` checks the token order and throws a `ValidationError` on the first problem. Index arguments are checked right away, when `where`, `and`, `or`, `group` or `remove` is called.
+`build()` checks the token order and throws a `ValidationError` on the first problem. Index arguments are checked right away, when `where`, `and`, `or`, `group`, `remove` or `update` is called.
 
 ```ts
 import { Query, Op, ValidationError } from "@qfilter/core";
@@ -266,6 +266,7 @@ new Query<User>().where("age", Op.GREATER_THAN, 18).and(5);
 | `hasValue(property, v)` | `true` if a condition on `property` has value `v`           |
 | `getIndexByToken(p, v)` | Index of the first condition on `p` with value `v`, or `-1` |
 | `remove(index)`         | Removes the condition at `index` and its connector          |
+| `update(index, token)`  | Replaces the token at `index`                               |
 | `totalCount`            | Number of tokens in `filters`                               |
 
 ### Add a filter only once
@@ -330,6 +331,32 @@ query.remove(query.getIndexByToken("name", "Ana"));
 A group left with one condition, such as `(age > 18)`, is kept.
 
 `remove` throws `CONDITION_NOT_FOUND` when `index` is `-1`, which is what `getIndexByToken` returns when nothing matches. It throws `INVALID_INDEX` when there is no token at `index` or the token there is not a condition.
+
+### Update a token
+
+`update(index, token)` replaces the token at `index` with any `ExpressionToken`: a condition, a connector or a parenthesis. It returns the query, so calls can be chained:
+
+```ts
+// filters: [address.city = "Madrid", ||, address.city = "Lisbon"]
+
+// Switch the connector to AND
+query.update(1, { type: "and", operator: "&&" });
+
+// Change the second city
+query.update(2, {
+  type: "condition",
+  property: "address.city",
+  operator: Op.EQUAL,
+  value: "Paris",
+  valueType: "string",
+});
+
+// filters: [address.city = "Madrid", &&, address.city = "Paris"]
+```
+
+The token is stored as given, so write a condition in its [output shape](#output): `operator` as the `Op` value, a matching `valueType`, and `Date` values as ISO strings.
+
+`update` throws `INVALID_INDEX` when there is no token at `index`. The token order is checked by `build()`, like any other change: replacing a connector with a condition, for example, makes `build()` throw `CONSECUTIVE_CONDITIONS`.
 
 ## License
 
