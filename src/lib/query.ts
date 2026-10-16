@@ -1,16 +1,13 @@
-import type { NestedKeyOf, NestedValueOf, NullableKeyOf } from "./types.helpers.ts";
+import type { NestedKeyOf, NestedValueOf } from "./types.helpers.ts";
 import { checkIndex, indexOf, serialize, valueTypeOf } from "./helpers/index.ts";
 import { FORBIDDEN_NEXT, LABELS } from "./types/validation-errors.types.ts";
 import { ValidationError, type ValidationErrorCode } from "./errors.ts";
 import {
+  OperatorBaseline,
   type OrderByDirection,
   type ExpressionToken,
-  type ExpressionType,
-  type InsertOptions,
-  type NullOperator,
   type WhereOptions,
   LogicalOperators,
-  OperatorBaseline,
   type OperatorFor,
   type QueryResult,
   type GroupQuery,
@@ -18,6 +15,7 @@ import {
   type InsertAt,
   type Operator,
   type OrderBy,
+  type ExpressionType,
 } from "./types.ts";
 
 // biome-ignore lint/suspicious/noExplicitAny: <By providing any you can use the class without being required to specify the type>
@@ -253,32 +251,11 @@ class Query<T = any> {
     value: NestedValueOf<T, P>,
     options?: WhereOptions<T, P>,
   ): Query<T>;
-  /**
-   * Adds a null check on a nullable property.
-   *
-   * @typeParam P - A nullable key or nested dot-path of `T`.
-   * @param property - The nullable property, or nested property path, to check.
-   * @param operator - `Op.EQUAL` to match `null`, `Op.NOT_EQUAL` to exclude it.
-   * @param value - Always `null`.
-   * @param options - Insertion options.
-   * @returns The current {@link Query} instance, for chaining.
-   *
-   * @example
-   * ```ts
-   * new Query<User>().where("deletedAt", Op.EQUAL, null);
-   * ```
-   */
-  where<P extends NullableKeyOf<T>>(
+  where<P extends NestedKeyOf<T>>(
     property: P,
-    operator: NullOperator,
-    value: null,
-    options?: InsertOptions,
-  ): Query<T>;
-  where(
-    property: string,
-    operator: Operator,
+    operator: OperatorFor<NestedValueOf<T, P>>,
     value: unknown,
-    options?: InsertOptions & { caseInsensitive?: boolean },
+    options?: WhereOptions<T, P>,
   ): Query<T> {
     const condition: Record<string, unknown> = {
       type: "condition",
