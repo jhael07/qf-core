@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.7](https://github.com/jhael07/qf-core/compare/v0.0.6...v0.0.7) (2026-10-16)
+
+### Features
+
+- add update method to Query class and enhance validation documentation ([fa25687](https://github.com/jhael07/qf-core/commit/fa256876e3cd9964113eeab35555d337a8644244))
+
 ### [0.0.6](https://github.com/jhael07/qf-core/compare/v0.0.5...v0.0.6) (2026-10-16)
 
 ### [0.0.5](https://github.com/jhael07/qf-core/compare/v0.0.4...v0.0.5) (2026-10-16)
