@@ -42,7 +42,7 @@ const result = new Query<User>()
     { type: "and", operator: "&&" },
     { type: "condition", property: "address.city", operator: "eq", value: "Madrid", valueType: "string" },
   ],
-  order: { property: "name", direction: "asc" },
+  order: [{ property: "name", direction: "asc" }],
 }
 ```
 
@@ -158,7 +158,15 @@ Inside the callback, tokens always append to the group: the builder's `where`, `
 new Query<User>().orderBy("address.city", "desc");
 ```
 
-`order` is `null` in the result when `orderBy` is not called. Calling it again replaces the previous order.
+Each call adds a sort key, so you can sort by several properties. Keys apply in the order they were added:
+
+```ts
+// ORDER BY address.city DESC, name ASC
+new Query<User>().orderBy("address.city", "desc").orderBy("name", "asc").build().order;
+// [{ property: "address.city", direction: "desc" }, { property: "name", direction: "asc" }]
+```
+
+`order` is `null` in the result when `orderBy` is not called.
 
 ## Output
 
@@ -167,7 +175,7 @@ new Query<User>().orderBy("address.city", "desc");
 ```ts
 type QueryResult<T> = {
   filters: ExpressionToken<T>[];
-  order: { property: string; direction: "asc" | "desc" } | null;
+  order: { property: string; direction: "asc" | "desc" }[] | null;
 };
 ```
 
@@ -187,7 +195,7 @@ type QueryResult<T> = {
 
 ## Validation
 
-`build()` checks the token order and throws a `ValidationError` on the first problem. Index arguments are checked right away, when `where`, `and`, `or`, `group`, `remove` or `update` is called.
+`build()` checks the token order and throws a `ValidationError` on the first problem. Index arguments are checked right away, when `where`, `and`, `or`, `group`, `remove`, `updateCondition`, `updateLogicalOperator` or `getTokenByIndex` is called.
 
 ```ts
 import { Query, Op, ValidationError } from "@qfilter/core";
@@ -203,17 +211,17 @@ try {
 }
 ```
 
-| Code                            | When                                                                   |
-| ------------------------------- | ---------------------------------------------------------------------- |
-| `INVALID_START`                 | Filters or a group start with `and`, `or` or `)`                       |
-| `INVALID_END`                   | Filters end with `and`, `or` or an open `(`                            |
-| `MISSING_CONNECTOR`             | A group sits next to a condition or another group without `and` / `or` |
-| `CONSECUTIVE_CONDITIONS`        | Two conditions in a row                                                |
-| `CONSECUTIVE_LOGICAL_OPERATORS` | `and` / `or` followed by another `and`, `or` or `)`                    |
-| `EMPTY_GROUP`                   | A group with nothing inside                                            |
-| `UNBALANCED_GROUP`              | A `)` without a matching `(`, or a `(` that is never closed            |
-| `INVALID_INDEX`                 | An index that is not an integer within the filters                     |
-| `CONDITION_NOT_FOUND`           | `remove(-1)`: `getIndexByToken` found no matching condition            |
+| Code                            | When                                                                                                                   |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `INVALID_START`                 | Filters or a group start with `and`, `or` or `)`                                                                       |
+| `INVALID_END`                   | Filters end with `and`, `or` or an open `(`                                                                            |
+| `MISSING_CONNECTOR`             | A group sits next to a condition or another group without `and` / `or`                                                 |
+| `CONSECUTIVE_CONDITIONS`        | Two conditions in a row                                                                                                |
+| `CONSECUTIVE_LOGICAL_OPERATORS` | `and` / `or` followed by another `and`, `or` or `)`                                                                    |
+| `EMPTY_GROUP`                   | A group with nothing inside                                                                                            |
+| `UNBALANCED_GROUP`              | A `)` without a matching `(`, or a `(` that is never closed                                                            |
+| `INVALID_INDEX`                 | An index that is not an integer within the filters, or that points at the wrong kind of token for `remove` / `update*` |
+| `CONDITION_NOT_FOUND`           | `remove(-1)`: `getIndexByToken` found no matching condition                                                            |
 
 ## Inserting at an index
 
@@ -260,14 +268,19 @@ new Query<User>().where("age", Op.GREATER_THAN, 18).and(5);
 
 ## Helpers
 
-| Method                  | Description                                                 |
-| ----------------------- | ----------------------------------------------------------- |
-| `hasKey(property)`      | `true` if any condition uses `property`                     |
-| `hasValue(property, v)` | `true` if a condition on `property` has value `v`           |
-| `getIndexByToken(p, v)` | Index of the first condition on `p` with value `v`, or `-1` |
-| `remove(index)`         | Removes the condition at `index` and its connector          |
-| `update(index, token)`  | Replaces the token at `index`                               |
-| `totalCount`            | Number of tokens in `filters`                               |
+| Method                               | Description                                                 |
+| ------------------------------------ | ----------------------------------------------------------- |
+| `hasKey(property)`                   | `true` if any condition uses `property`                     |
+| `hasValue(property, v)`              | `true` if a condition on `property` has value `v`           |
+| `getIndexByToken(p, v)`              | Index of the first condition on `p` with value `v`, or `-1` |
+| `getIndexByConditionPropertyName(p)` | Index of the first condition on `p`, or `-1`                |
+| `getTokenByIndex(index)`             | The token at `index`                                        |
+| `getConditionByPropertyName(p)`      | The first condition on `p`, or `undefined`                  |
+| `getAllConditionsByPropertyName(p)`  | Every condition on `p`, in order (`[]` when none)           |
+| `remove(index)`                      | Removes the condition at `index` and its connector          |
+| `updateCondition(index, value)`      | Replaces the value of the condition at `index`              |
+| `updateLogicalOperator(index, op)`   | Replaces the `and` / `or` connector at `index`              |
+| `totalCount`                         | Number of tokens in `filters`                               |
 
 ### Add a filter only once
 
@@ -307,6 +320,29 @@ const query = new Query<User>().where("deletedAt", Op.GREATER_THAN, new Date("20
 query.hasValue("deletedAt", new Date("2024-01-01")); // true
 ```
 
+### Read the current filters
+
+`getConditionByPropertyName` and `getAllConditionsByPropertyName` return the stored conditions, which is handy for pre-filling form inputs from an existing query:
+
+```ts
+// filters: [age > 18, &&, address.city = "Madrid", ||, address.city = "Lisbon"]
+
+query.getConditionByPropertyName("age")?.value; // 18
+query.getAllConditionsByPropertyName("address.city").map((c) => c.value); // ["Madrid", "Lisbon"]
+query.getConditionByPropertyName("name"); // undefined
+```
+
+The conditions come back in their [output shape](#output), so `Date` values are ISO strings.
+
+Use `getIndexByConditionPropertyName` when you need the position but not the value, for example to update a filter whose current value you don't know:
+
+```ts
+const idx = query.getIndexByConditionPropertyName("age"); // 0
+query.getTokenByIndex(idx); // { type: "condition", property: "age", operator: "gt", value: 18, ... }
+```
+
+`getTokenByIndex` returns any token (condition, connector or parenthesis) and throws `INVALID_INDEX` when there is no token at `index`.
+
 ### Remove a condition
 
 `remove(index)` removes the condition at `index` together with its connector, so the filters stay valid. It takes the connector after the condition, or the one before it when the condition is last in the filters or its group. Find the index with `getIndexByToken`:
@@ -332,31 +368,27 @@ A group left with one condition, such as `(age > 18)`, is kept.
 
 `remove` throws `CONDITION_NOT_FOUND` when `index` is `-1`, which is what `getIndexByToken` returns when nothing matches. It throws `INVALID_INDEX` when there is no token at `index` or the token there is not a condition.
 
-### Update a token
+### Update a condition or connector
 
-`update(index, token)` replaces the token at `index` with any `ExpressionToken`: a condition, a connector or a parenthesis. It returns the query, so calls can be chained:
+`updateCondition(index, value)` replaces the value of the condition at `index`. Its property, operator and `caseInsensitive` option stay the same. The value is stored the way `where` stores it: `Date`s become ISO strings and `valueType` is recomputed.
+
+`updateLogicalOperator(index, op)` swaps the `and` / `or` connector at `index`.
+
+Both return the query, so calls can be chained:
 
 ```ts
+import { LogicalOperators } from "@qfilter/core";
+
 // filters: [address.city = "Madrid", ||, address.city = "Lisbon"]
 
-// Switch the connector to AND
-query.update(1, { type: "and", operator: "&&" });
-
-// Change the second city
-query.update(2, {
-  type: "condition",
-  property: "address.city",
-  operator: Op.EQUAL,
-  value: "Paris",
-  valueType: "string",
-});
+query
+  .updateLogicalOperator(1, { type: "and", operator: LogicalOperators.AND })
+  .updateCondition(query.getIndexByToken("address.city", "Lisbon"), "Paris");
 
 // filters: [address.city = "Madrid", &&, address.city = "Paris"]
 ```
 
-The token is stored as given, so write a condition in its [output shape](#output): `operator` as the `Op` value, a matching `valueType`, and `Date` values as ISO strings.
-
-`update` throws `INVALID_INDEX` when there is no token at `index`. The token order is checked by `build()`, like any other change: replacing a connector with a condition, for example, makes `build()` throw `CONSECUTIVE_CONDITIONS`.
+Each method only accepts the kind of token it updates. `updateCondition` throws `INVALID_INDEX` when the token at `index` is not a condition, and `updateLogicalOperator` throws it when the token is not an `and` / `or`. Both also throw it when there is no token at `index`. To change a condition's property or operator, `remove` it and add a new one with `where`.
 
 ## License
 

@@ -1,7 +1,7 @@
-import type { NestedKeyOf, NestedValueOf } from "./types.helpers.ts";
 import { checkIndex, indexOf, serialize, valueTypeOf } from "./helpers/index.ts";
 import { FORBIDDEN_NEXT, LABELS } from "./types/validation-errors.types.ts";
 import { ValidationError, type ValidationErrorCode } from "./errors.ts";
+import type { NestedKeyOf, NestedValueOf } from "./types.helpers.ts";
 import {
   OperatorBaseline,
   type OrderByDirection,
@@ -24,6 +24,8 @@ import {
 class Query<T = any> {
   private _filters: Array<ExpressionToken<T>> = [];
   private _orderBy?: OrderBy<T>[] | null = null;
+  private _page: number = 1;
+  private _pageSize: number = 1;
 
   /** The number of tokens in the filters: conditions, connectors and group brackets. */
   get totalCount(): number {
@@ -186,30 +188,68 @@ class Query<T = any> {
   }
 
   /**
-   * Updates any element inside the query.
+   * Replaces the value of the condition at `idx`, keeping its property,
+   * operator and options. The value is stored the way {@link Query.where}
+   * stores it: `Date`s become ISO strings and `valueType` is recomputed.
    *
-   * @param idx - positional index to update the element
-   * @param expressionToken - Any form of operator such as {@link LogicalOperators} or {@link Condition}
-   * @returns Query<T>
+   * @param idx - The condition's position, usually from {@link Query.getIndexByToken}.
+   * @param value - The new value to compare against.
+   * @returns The current {@link Query} instance, for chaining.
+   *
+   * @throws - {@link ValidationError} with code `INVALID_INDEX` when `idx` is
+   *   not an existing position or the token there is not a condition.
+   *
+   * @example
+   * ```ts
+   * // filters: [age > 18]
+   * query.updateCondition(query.getIndexByToken("age", 18), 21);
+   * // filters: [age > 21]
+   * ```
    */
   updateCondition<P extends NestedKeyOf<T>>(idx: number, value: NestedValueOf<T, P>): Query<T>;
   updateCondition(idx: number, value: unknown): Query<T> {
-    checkIndex(idx, this._filters.length - 1);
+    const current = this._tokenOfType(idx, ["condition"], "a condition") as Condition<T>;
 
-    const currentTokenExpression = this.getTokenByIndex(idx);
-    this._filters.splice(idx, 1, { ...currentTokenExpression, value } as ExpressionToken<T>);
+    this._filters[idx] = {
+      ...current,
+      value: serialize(value),
+      valueType: valueTypeOf(value),
+    } as Condition<T>;
 
     return this;
   }
 
+  /**
+   * Replaces the `&&` / `||` connector at `idx`.
+   *
+   * @param idx - The connector's position.
+   * @param operator - The new connector, `{ type: "and", operator: "&&" }` or
+   *   `{ type: "or", operator: "||" }`.
+   * @returns The current {@link Query} instance, for chaining.
+   *
+   * @throws - {@link ValidationError} with code `INVALID_INDEX` when `idx` is
+   *   not an existing position or the token there is not a connector.
+   */
   updateLogicalOperator(idx: number, operator: Or | And): Query<T> {
-    checkIndex(idx, this._filters.length - 1);
+    this._tokenOfType(idx, ["and", "or"], "a connector");
 
-    const currentTokenExpression = this.getTokenByIndex(idx);
-
-    this._filters.splice(idx, 1, { ...currentTokenExpression, ...operator } as ExpressionToken<T>);
+    this._filters[idx] = { type: operator.type, operator: operator.operator } as Or | And;
 
     return this;
+  }
+
+  private _tokenOfType(idx: number, types: ExpressionType[], label: string): ExpressionToken<T> {
+    const token = this.getTokenByIndex(idx);
+
+    if (!types.includes(token.type)) {
+      throw new ValidationError(
+        "INVALID_INDEX",
+        `Invalid index ${idx}: the token there is not ${label}.`,
+        idx,
+      );
+    }
+
+    return token;
   }
 
   /**
@@ -270,7 +310,7 @@ class Query<T = any> {
   }
 
   orderBy(property: NestedKeyOf<T>, direction: OrderByDirection): Query<T> {
-    this._orderBy?.push({ property, direction });
+    this._orderBy = [...(this._orderBy ?? []), { property, direction }];
     return this;
   }
 
@@ -362,9 +402,24 @@ class Query<T = any> {
     }
   }
 
+  setPage(page: number): Query<T> {
+    this._page = page;
+    return this;
+  }
+
+  setPageSize(pageSize: number): Query<T> {
+    this._pageSize = pageSize;
+    return this;
+  }
+
   build(): QueryResult<T> {
     this._validateBuild();
-    return { filters: [...this._filters], order: this._orderBy };
+    return {
+      filters: [...this._filters],
+      order: this._orderBy,
+      page: this._page,
+      pageSize: this._pageSize,
+    };
   }
 }
 
