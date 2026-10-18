@@ -29,8 +29,8 @@
     "test": "vp test",
     "check": "vp check",
     "exec": "node dist/index.mjs",
-    "prepublishOnly": "vp run build",
-    "release": "standard-version && vp run build",
+    "prepublishOnly": "vp run release && vp run build",
+    "release": "standard-version",
     "prepare": "vp config"
   },
   "dependencies": {
