@@ -31,7 +31,7 @@ import {
 // biome-ignore lint/suspicious/noExplicitAny: <By providing any you can use the class without being required to specify the type>
 class QueryBuilder<T = any> {
   private _filters: Array<ExpressionToken<T>> = [];
-  private _orderBy?: OrderBy<T>[] | null = null;
+  private _orderBy?: OrderBy<T>[] = [];
   private _page: number = 1;
   private _pageSize: number = 1;
 
