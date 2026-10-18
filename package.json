@@ -1,6 +1,6 @@
 {
   "name": "@qfilter/core",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "Type-safe, chainable query builder for composing validated filter expressions with nested paths, grouping, and ordering.",
   "homepage": "https://github.com/jhael07/qf-core#readme",
   "bugs": {
