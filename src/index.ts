@@ -1,4 +1,6 @@
+export { default as QueryBuilder } from "./lib/query.ts";
 export { default as Query } from "./lib/query.ts";
+
 export { ValidationError, type ValidationErrorCode } from "./lib/errors.ts";
 export {
   type And,
