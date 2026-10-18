@@ -16,12 +16,14 @@ import {
   type Operator,
   type OrderBy,
   type ExpressionType,
+  type Or,
+  type And,
 } from "./types.ts";
 
 // biome-ignore lint/suspicious/noExplicitAny: <By providing any you can use the class without being required to specify the type>
 class Query<T = any> {
   private _filters: Array<ExpressionToken<T>> = [];
-  private _orderBy?: OrderBy<T> | null = null;
+  private _orderBy?: OrderBy<T>[] | null = null;
 
   /** The number of tokens in the filters: conditions, connectors and group brackets. */
   get totalCount(): number {
@@ -30,6 +32,7 @@ class Query<T = any> {
 
   private _add(tokens: Array<ExpressionToken<T>>, at?: InsertAt): void {
     const idx = indexOf(at);
+
     if (idx === undefined) {
       this._filters.push(...tokens);
       return;
@@ -72,11 +75,31 @@ class Query<T = any> {
     );
   }
 
+  getIndexByConditionPropertyName(property: NestedKeyOf<T>): number {
+    return this._filters.findIndex((x) => x.type === "condition" && x.property === property);
+  }
+
   getTokenByIndex(idx: number): ExpressionToken<T> {
     checkIndex(idx, this._filters.length - 1);
 
     const tokenExpression = this._filters[idx];
     return tokenExpression;
+  }
+
+  getConditionByPropertyName(property: NestedKeyOf<T>): Condition<T> | undefined {
+    const condtion = this._filters.find(
+      (x) => x.type === "condition" && x.property === property,
+    ) as Condition<T> | undefined;
+
+    return condtion;
+  }
+
+  getAllConditionsByPropertyName(property: NestedKeyOf<T>): Condition<T>[] {
+    const conditions = this._filters.filter(
+      (x) => x.type === "condition" && x.property === property,
+    );
+
+    return conditions as Condition<T>[];
   }
 
   /**
@@ -169,9 +192,22 @@ class Query<T = any> {
    * @param expressionToken - Any form of operator such as {@link LogicalOperators} or {@link Condition}
    * @returns Query<T>
    */
-  update(idx: number, expressionToken: ExpressionToken<T>): Query<T> {
+  updateCondition<P extends NestedKeyOf<T>>(idx: number, value: NestedValueOf<T, P>): Query<T>;
+  updateCondition(idx: number, value: unknown): Query<T> {
     checkIndex(idx, this._filters.length - 1);
-    this._filters.splice(idx, 1, expressionToken);
+
+    const currentTokenExpression = this.getTokenByIndex(idx);
+    this._filters.splice(idx, 1, { ...currentTokenExpression, value } as ExpressionToken<T>);
+
+    return this;
+  }
+
+  updateLogicalOperator(idx: number, operator: Or | And): Query<T> {
+    checkIndex(idx, this._filters.length - 1);
+
+    const currentTokenExpression = this.getTokenByIndex(idx);
+
+    this._filters.splice(idx, 1, { ...currentTokenExpression, ...operator } as ExpressionToken<T>);
 
     return this;
   }
@@ -234,7 +270,7 @@ class Query<T = any> {
   }
 
   orderBy(property: NestedKeyOf<T>, direction: OrderByDirection): Query<T> {
-    this._orderBy = { property, direction };
+    this._orderBy?.push({ property, direction });
     return this;
   }
 

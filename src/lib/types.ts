@@ -188,7 +188,7 @@ export type OrderBy<T> = {
 
 export type QueryResult<T> = {
   filters: Array<ExpressionToken<T>>;
-  order: OrderBy<T> | undefined | null;
+  order: OrderBy<T>[] | undefined | null;
 };
 
 /**
