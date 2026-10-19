@@ -23,3 +23,11 @@ export {
   ValueType,
   type WhereOptions,
 } from "./lib/types.ts";
+
+export type {
+  NestedKeyOf,
+  ArrayKeyOf,
+  NestedValueOf,
+  NullableKeyOf,
+  SerializedValue,
+} from "./lib/types.helpers.ts";
